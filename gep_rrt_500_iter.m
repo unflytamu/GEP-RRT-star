@@ -1,66 +1,33 @@
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 Imp=im2bw(imread('ral_jincou.bmp')); 
-source=[25 25]; % source position in Y, X format
-goal=[384 690]; % goal position in Y, X format
+source=[25 25];
+goal=[384 690];
 op_dis=759.2*1.01;
 Delta= 10;    
 mindis=15;
-imshow(Imp)
-hold on
-% plot(source(1,1), source(1,2), 'ro', 'MarkerSize',10, 'MarkerFaceColor','r');
-% plot(goal(1,1), goal(1,2), 'go', 'MarkerSize',10, 'MarkerFaceColor','g');% ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿?
-GA_rrt_500=[];
-%tic
-attempt=1;
-while attempt < 2
-    s_time=tic;
-    %data=rrt_1(source,goal,op_dis,Imp,Delta);%ÓëRRT*½áºÏ
-    data=informed_rrt_1(source,goal,op_dis,Imp);%ÓëInformed RRT*½áºÏ
-    %data=Q_rrt_informed_1(source,goal,op_dis,Imp);%ÓëQ_RRT*½áºÏ
-    init_path=getInitPath(data,mindis);
-    GA_path=GA_optmisation(init_path,op_dis,Imp,mindis,Delta);
-    tEnd = toc(s_time); 
-%     plot(data(:,1), data(:,2), 'r.');
-%     plot(data(:,1), data(:,2), 'r');
-%     plot(init_path(:,1), init_path(:,2), 'g*');
-%     plot(init_path(:,1), init_path(:,2), 'g');
-    if isempty(GA_path)
-        continue
-    end
-    if GA_path(1,3)<761%op_dis
-    %if GA_path(end,1)<761
-        dd=[GA_path(1,3),tEnd];
-        GA_rrt_500=[GA_rrt_500;dd];
-        attempt=attempt+1;
-    end
-end
-% path=data;
-% init_path=getInitPath(path,mindis);
-% plot(init_path(:,1), init_path(:,2), 'r.');
-% plot(init_path(:,1), init_path(:,2), 'r');
-% GA_path=GA_optmisation(init_path,op_dis,Imp,mindis,Delta);
-% plot(init_path(:,1), init_path(:,2), 'r.');
-% plot(init_path(:,1), init_path(:,2), 'r');
-
+tic
+%data=rrt_1(source,goal,op_dis,Imp,Delta);%combined with RRT*
+data=informed_rrt_1(source,goal,op_dis,Imp);%combined with Informed RRT*
+%data=Q_rrt_informed_1(source,goal,op_dis,Imp);%combined with Q_RRT*
+init_path=getInitPath(data,mindis);
+GA_path=GA_optmisation(init_path,op_dis,Imp,mindis,Delta);
+disp([num2str(toc)]);
 function s = GA_optmisation(init_path, op_dis, Imp, mindis, Delta)
-    NP = 30;       % ÖÖÈºÊıÁ¿
-    max_gen = 30;  % ×î´ó½ø»¯´úÊı
-    pc = 0.9;      % ½»²æ¸ÅÂÊ
-    pm = 0.9;      % ±äÒì¸ÅÂÊ
+    NP = 30;       % ç§ç¾¤æ•°é‡
+    max_gen = 30;  % æœ€å¤§è¿›åŒ–ä»£æ•°
+    pc = 0.8;      % äº¤å‰æ¦‚ç‡
+    pm = 0.8;      % å˜å¼‚æ¦‚ç‡
     
     new_pop1 = cell(NP, 1); 
     best_path_ever = init_path; 
     best_dis_ever = cal_dis1(init_path); 
-    rec_data=zeros(max_gen,2);
-    Time=tic;
-    
-    %% 1. ÖÖÈº³õÊ¼»¯
+    Time=tic;   
     for i = 1:NP
        if i == 1
            path = init_path;
        else
-           path = getInitGAPath(init_path, Delta, Imp, 0.8); % ÓÃ0.5±£Ö¤³õÊ¼¶àÑùĞÔ
+           path = getInitGAPath_new(init_path, Delta, Imp, 0.8);
        end
        dis = cal_dis1(path);
        if dis < best_dis_ever
@@ -68,73 +35,49 @@ function s = GA_optmisation(init_path, op_dis, Imp, mindis, Delta)
            best_path_ever = path;
        end
        new_pop1(i, 1) = {path};
-    end   
-    
+    end     
     mean_path_value = zeros(1, max_gen);
-    min_path_value = zeros(1, max_gen);
-    
-    %% 2. GA Ö÷Ñ­»· (¼ÓÈë¾Ö²¿×îÓÅÍ»Î§)
-    stagnation_count = 0; % ¼ÇÂ¼¡°Í£ÖÍ¡±µÄ´úÊı
-    best_dis_last = best_dis_ever; % ¼ÇÂ¼ÉÏÒ»´úµÄ×îÓÅÖµ
+    min_path_value = zeros(1, max_gen);   
+    stagnation_count = 0; 
+    best_dis_last = best_dis_ever; 
 
     for gen = 1 : max_gen
-        % ================== (1) ¼ÆËãÂ·¾¶³¤¶ÈºÍÊÊÓ¦¶È ==================
         path_value = cal_path_value1(new_pop1); 
         [min_dis, m] = min(path_value);         
         
         mean_path_value(gen) = mean(path_value);
         min_path_value(gen) = min_dis;
-        
-        % ¼ÇÂ¼ºÍÅĞ¶ÏÊÇ·ñÏİÈëÍ£ÖÍ
         if abs(min_dis - best_dis_last) < 0.5
             stagnation_count = stagnation_count + 1;
         else
             stagnation_count = 0;
         end
         best_dis_last = min_dis;
-        
-        % ¸üĞÂÈ«¾Ö×îÓÅ
         if min_dis < best_dis_ever
             best_dis_ever = min_dis;
             best_path_ever = new_pop1{m, 1};
-%             if best_dis_ever < op_dis
-%                 tEnd = toc(Time); 
-%                 best_path_ever(:,3)=best_dis_ever;
-%                %best_path_ever(:,4)=best_dis_ever;
-%                 s = best_path_ever;
-%                 fprintf('µÚ %d ´ú: µ±Ç°×îºÃÂ·¾¶³¤¶È = %.2f (Ê±¼ä %0.2f )\n', gen, best_dis_ever, tEnd); 
-%                 %disp(['´ïµ½Ä¿±êÂ·¾¶³¤¶È£¬ÌáÇ°½áÊø£¬ÔËĞĞÊ±¼ä: ', num2str(toc)]);
-%                 return;
-%             end
+            if best_dis_ever < op_dis
+                best_path_ever(:,3)=best_dis_ever;
+                s = best_path_ever;
+                return;
+            end
         end 
-        % ´òÓ¡µ±Ç°×´Ì¬
-        %tEnd = toc(Time); 
-        %fprintf('µÚ %d ´ú: µ±Ç°×îºÃÂ·¾¶³¤¶È = %.2f (Í£ÖÍ %d ´ú)\n', gen, best_dis_ever, stagnation_count); 
-        %fprintf('µÚ %d ´ú: µ±Ç°×îºÃÂ·¾¶³¤¶È = %.2f (Ê±¼ä %0.2f )\n', gen, best_dis_ever, tEnd); 
-        % ¼ÆËãÊÊÓ¦¶È
         fit_value = path_value .^ -1;     
-        % ================== (2) ÒÅ´«²Ù×÷ ==================
         new_pop2 = selection1(new_pop1, fit_value);
         new_pop2 = crossover1(new_pop2, pc); 
-        % ================== (3) ¡¾Í»Î§»úÖÆ¡¿£ºÁ¬Ğø 5 ´ú²»ÓÅ»¯£¬´¥·¢¡°´óÌøÔ¾¡± ==================
-        if stagnation_count >=2 % Í£ÖÍ 3 ´ú¾Í´¥·¢Í»Î§£¬¸øµãÑ¹Á¦
+        if stagnation_count >=2 
             tmp_path = best_path_ever;
             [len, ~] = size(tmp_path);   
-            % È·±£Â·¾¶¹»³¤²Å´¥·¢Í»Î§
             if len > 20
-                % ¡¾ºËĞÄĞŞ¸Ä¡¿£ºÉè¶¨Í»Î§¿ç¶È¡£±ÜÃâ¿çÔ½°ëÊıÂ·¾¶£¬¸Ä³É³¢ÊÔ 15%~25% µÄ×Ü³¤¶È¡£
-                min_span = max(3, round(len * 0.10)); % ×îĞ¡¿ç¶È£¨ÖÁÉÙ 5 ¸öµã£©
-                max_span = max(8, round(len * 0.20)); % ×î´ó¿ç¶È£¨²»³¬¹ı×Ü³¤µÄ 25%£©
-                % Ëæ»úÉú³É¿ç¶È³¤¶È
+                min_span = max(3, round(len * 0.10)); 
+                max_span = max(8, round(len * 0.20)); 
                 span = randi([min_span, max_span]);  
-                % ¸ù¾İÉú³ÉµÄ¿ç¶È£¬Ëæ»ú°²È«µØÑ¡ÔñÆğÊ¼µã idx1
                 max_start_idx = len - span - 1;
                 if max_start_idx > 2
                     idx1 = randi([2, max_start_idx]);
-                    idx2 = idx1 + span; % ÖÕµã×Ô¶¯µÈÓÚÆğÊ¼µã+¿ç¶È                  
+                    idx2 = idx1 + span;                 
                     p1 = tmp_path(idx1, :);
                     p2 = tmp_path(idx2, :);                 
-                    % ¼ì²éÖ±ÏßÊÇ·ñ¿ÉĞĞ
                     if collisionChecking_deep(p1, p2, Imp)
                         x_pts = round(linspace(p1(1), p2(1), idx2 - idx1 + 1));
                         y_pts = round(linspace(p1(2), p2(2), idx2 - idx1 + 1));
@@ -145,77 +88,35 @@ function s = GA_optmisation(init_path, op_dis, Imp, mindis, Delta)
                         if new_len < best_dis_ever
                             best_dis_ever = new_len;
                             best_path_ever = tmp_path;
-%                             if best_dis_ever<op_dis
-%                                % tEnd = toc(Time); 
-%                                 best_path_ever(:,3)=best_dis_ever;
-%                                % best_path_ever(:,4)=best_dis_ever;
-%                                 s = best_path_ever;
-%                                 tEnd = toc(Time); 
-%                                 fprintf('  ---> Â·¾¶³¤¶ÈÌø±äµ½ %.3f,Ê±¼ä£º%.3f\n',  best_dis_ever,tEnd);
-%                                 %disp(['·¶Î§Í»Î§´ïµ½Ä¿±êÂ·¾¶³¤¶ÈÌáÇ°½áÊø£¬ÔËĞĞÊ±¼ä: ', num2str(toc)]);
-%                                 return;
-%                             end
-                            % °ÑÕâ¸öÍ»±äÒìÖÖÇ¿ÖÆÈûÈëÖÖÈº
+                            if best_dis_ever<op_dis
+                                best_path_ever(:,3)=best_dis_ever;
+                                s = best_path_ever;
+                                tEnd = toc(Time); 
+                                return;
+                            end
                             new_pop2{randi(NP), 1} = tmp_path;
-                            %fprintf('  ---> ´¥·¢·¶Î§Í»Î§(¿ç¶È %d µã)£¡Â·¾¶³¤¶ÈÌø±äµ½ %.2f\n', span, best_dis_ever);
                         end
                     end
                 end
             end
         end
-        % ================== (4) ±äÒì²Ù×÷ ==================
-        % ÕâÀïµÄ±äÒì³¢ÊÔ´ÎÊıÒÑ¾­ÓÅ»¯Îª 5 ´Î
         new_pop2 = mutation1(new_pop2, pm, Imp, 3, m);%
-        
-        % ================== (5) ¾«Ó¢±£Áô²ßÂÔ ==================
         new_pop2{m, 1} = best_path_ever;
-        
-        % ================== (6) ¸üĞÂÖÖÈº ==================
         new_pop1 = new_pop2;
-%         tEnd = toc(Time); 
-%         cur_dis=cal_dis1(best_path_ever(:,1:2));
-%         rec_data(gen,:)=[cur_dis,tEnd];
     end
     best_path_ever(:,3)=cal_dis1(best_path_ever(:,1:2));
-    %best_path_ever(:,4)=;
-    %disp(['GA µü´úÈ«²¿½áÊø£¬ÔËĞĞÊ±¼ä: ', num2str(toc)]);
     s = best_path_ever; 
-    %s=rec_data;
 end
 
 function path_value = cal_path_value1(pop)
     [px, ~] = size(pop);
-    path_value = zeros(1, px); % Ô¤·ÖÅä
+    path_value = zeros(1, px);
     for i = 1:px
-        % Ö±½Óµ÷ÓÃ cal_dis1 ¶¯Ì¬¼ÆËã¾àÀë£¬ºöÂÔ¿ÉÄÜ´æÔÚµÄ¶àÓàÁĞ£¡
         path_value(1, i) = cal_dis1(pop{i, 1});
     end
 end
 
-function [path_value] = cal_path_value(pop)
-    [n, ~] = size(pop);
-    path_value = zeros(1, n);
-    for i = 1 : n
-        single_pop = pop{i, 1};
-        %[m,~ ] = size(single_pop);
-        path_value(1, i)=single_pop(1,4);%cal_dis1(single_pop);
-%         for j = 1 : m - 1
-%             %path_value(1, i) =path_value(1, i)+getDis(single_pop(j,:),single_pop(j+1,:));
-%             path_value(1, i)=
-%         end
-    end
-end
-
-function s=cal_dis2(path)
-    s=0;
-    for i=1:length(path)-1
-        dis=norm(path(i+1,1:2)-path(i,1:2),2);
-        s=s+dis;
-    end
-end
-
 function dis = cal_dis1(path)
-    % ²î·ÖÖ±½ÓÇó½â£¬0 Ñ­»·£¡
     diff_vec = diff(path(:, 1:2), 1, 1); 
     dis = sum(sqrt(sum(diff_vec.^2, 2)));
 end
@@ -227,7 +128,6 @@ function s=getInitPath(path,mindis)
         theta=mod(atan2(path(i+1,2)-path(i,2),path(i+1,1)-path(i,1)), 2*pi);
         if dis>mindis
             N = ceil(dis / mindis) + 1;
-            % Éú³É²åÖµµã
             x_pts = linspace(path(i,1), path(i+1,1), N);
             y_pts = linspace(path(i,2), path(i+1,2), N);
             t_pts = ones(1,N)*theta;
@@ -243,25 +143,21 @@ end
 
 function s=rrt_1(source,goal,op_dis,Imp,Delta)
     count=1;
-    xL=size(Imp,2);%ï¿½ï¿½Í¼xï¿½á³¤ï¿½ï¿½
-    yL=size(Imp,1);%ï¿½ï¿½Í¼yï¿½á³¤ï¿½ï¿½
-    x_I=source(1,1); y_I=source(1,2);           % ï¿½ï¿½ï¿½Ã³ï¿½Ê¼ï¿½ï¿½
-    x_G=goal(1,1); y_G=goal(1,2);       % ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿?
-%     Thr=10;                 %ï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½ï¿½ï¿½Ö?
-%     Delta= 10;              % ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½
+    xL=size(Imp,2);
+    yL=size(Imp,1);
+    x_I=source(1,1); y_I=source(1,2);         
+    x_G=goal(1,1); y_G=goal(1,2);     
     start_goal_dist = 1000000;
     path.pos(1).x = x_G;
     path.pos(1).y = y_G;
     knt=5000;
     total_dis=zeros(knt,1);
-    %% ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½
-    T.v(1).x = x_I;         % Tï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Òªï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½vï¿½Ç½Úµã£¬ï¿½ï¿½ï¿½ï¿½ï¿½È°ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ëµ½Tï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+    T.v(1).x = x_I;        
     T.v(1).y = y_I; 
-    T.v(1).xPrev = x_I;     % ï¿½ï¿½Ê¼ï¿½Úµï¿½Ä¸ï¿½ï¿½Úµï¿½ï¿½ï¿½È»ï¿½ï¿½ï¿½ä±¾ï¿½ï¿?
+    T.v(1).xPrev = x_I;   
     T.v(1).yPrev = y_I;
-    T.v(1).dist=0;          %ï¿½Ó¸ï¿½ï¿½Úµãµ½ï¿½Ã½Úµï¿½Ä¾ï¿½ï¿½ë£¬ï¿½ï¿½ï¿½ï¿½ï¿½È¡Å·ï¿½Ï¾ï¿½ï¿½ï¿½
-    T.v(1).indPrev = 0;     %
-    %tic
+    T.v(1).dist=0;        
+    T.v(1).indPrev = 0;     
     Time=tic;
     data_=[];
     s=[];
@@ -273,7 +169,6 @@ function s=rrt_1(source,goal,op_dis,Imp,Delta)
         else
             x_rand=goal;
         end
-        %%=======å¯»æ‰¾x_near===========%%
         x_near=[];
         min_dist = 1000000;
         near_iter = 1;
@@ -289,18 +184,13 @@ function s=rrt_1(source,goal,op_dis,Imp,Delta)
         end
         x_near(1) = T.v(near_iter).x;
         x_near(2) = T.v(near_iter).y;
-        %%========è·å–x_new============%%
         x_new=[];
         near_to_rand = [x_rand(1)-x_near(1),x_rand(2)-x_near(2)];
         normlized = near_to_rand / norm(near_to_rand) * Delta;
         x_new = x_near + normlized;
-        %plot(x_new(1), x_new(2), 'ro', 'MarkerSize',5, 'MarkerFaceColor','m');
-        %%=======éšœç¢æ£?æµ?===============%%
         if ~collisionChecking_deep(x_near,x_new,Imp) 
            continue;
         end
-
-        %%=======  nearC && chooseParent  =========%%
         near_iter_tmp = near_iter;
         nearptr = [];
         nearcount = 0;
@@ -314,7 +204,6 @@ function s=rrt_1(source,goal,op_dis,Imp,Delta)
            dist = norm(x_new - x_neartmp) + T.v(j).dist;
            norm_dist = norm(x_new - x_neartmp);
            if norm_dist < 50
-               %nearC
                if collisionChecking_deep(x_neartmp,x_new,Imp)
                     nearcount = nearcount + 1;
                     nearptr(nearcount,1) = j;
@@ -328,15 +217,12 @@ function s=rrt_1(source,goal,op_dis,Imp,Delta)
         x_near(1) = T.v(near_iter).x;
         x_near(2) = T.v(near_iter).y;
         count=count+1;
-        %%========å°†X_NEWå¢åŠ åˆ°æ ‘ä¸?========%%
         T.v(count).x = x_new(1);
         T.v(count).y = x_new(2); 
         T.v(count).xPrev = x_near(1);     
         T.v(count).yPrev = x_near(2);
         T.v(count).dist= norm(x_new - x_near) + T.v(near_iter).dist;          
         T.v(count).indPrev = near_iter;   
-        %plot([x_near(1),x_new(1)],[x_near(2),x_new(2)],'-r');
-        %%========  rewirte  =========%%
         [M,~] = size(nearptr);
         for k = 1:M
             x_1(1) = T.v(nearptr(k,1)).x;
@@ -348,21 +234,13 @@ function s=rrt_1(source,goal,op_dis,Imp,Delta)
                 T.v(nearptr(k,1)).xPrev = x_new(1);    
                 T.v(nearptr(k,1)).yPrev = x_new(2);
                 T.v(nearptr(k,1)).indPrev = count;
-    %             plot([x_1(1),x1_prev(1)],[x_1(2),x1_prev(2)],'-w');
-    %             hold on;
-    %             plot([x_1(1),x_new(1)],[x_1(2),x_new(2)],'-g');
-    %             hold on;
             end
         end
-
-        %plot([x_near(1),x_new(1)],[x_near(2),x_new(2)],'-b','Linewidth', 0.5);
-        %plot([x_near(1),x_new(1)],[x_near(2),x_new(2)],'color',[0.7, 0.7, 0.7],'Linewidth', 0.5);
-        if norm(x_new - goal) < 30 || collisionChecking_deep(x_new,goal,Imp)%2*Thr
+        if norm(x_new - goal) < 30 || collisionChecking_deep(x_new,goal,Imp)
             daad=T.v(count).dist + norm(x_new - goal);
             if (T.v(count).dist + norm(x_new - goal)) < start_goal_dist
                 start_goal_dist = (T.v(count).dist + norm(x_new - goal));
                 total_dis(iter)=start_goal_dist;
-                %disp([num2str(toc)]);
                 tEnd = toc(Time); 
                 xxxx=[start_goal_dist,tEnd];
                 data_=[data_;xxxx];
@@ -370,7 +248,7 @@ function s=rrt_1(source,goal,op_dis,Imp,Delta)
                 if iter < knt
                     path.pos(1).x = x_G; path.pos(1).y = y_G;
                     path.pos(2).x = T.v(end).x; path.pos(2).y = T.v(end).y;
-                    pathIndex = T.v(end).indPrev; % ï¿½Õµï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿?
+                    pathIndex = T.v(end).indPrev; 
                     j=0;
                     while 1
                         path.pos(j+3).x = T.v(pathIndex).x;
@@ -380,8 +258,8 @@ function s=rrt_1(source,goal,op_dis,Imp,Delta)
                             break
                         end
                         j=j+1;
-                    end  % ï¿½ï¿½ï¿½Õµï¿½ï¿½ï¿½İµï¿½ï¿½ï¿½ï¿½
-                    path.pos(end+1).x = x_I; path.pos(end).y = y_I; % ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½
+                    end  
+                    path.pos(end+1).x = x_I; path.pos(end).y = y_I; 
                 else
                     disp('Error, no path found!');
                 end
@@ -396,52 +274,34 @@ function s=rrt_1(source,goal,op_dis,Imp,Delta)
                     break;
                 end
             end
-            %break;
             continue;
         end
         if start_goal_dist<op_dis
             s=data_;
             break;
         end
-        %pause(0.01); 
     end
 end
 
 function feasible = collisionChecking_deep(startPose, goalPose, map)
-    % ÆğµãºÍÖÕµã×ªÎªÕûĞÍ×ø±ê
     x1 = round(startPose(1)); y1 = round(startPose(2));
     x2 = round(goalPose(1)); y2 = round(goalPose(2));
-    
-    % »ñÈ¡Í¼Ïñ³ß´ç
     [rows, cols] = size(map);
-    
-    % ±ß½ç¼ì²é£¨Èç¹û³¬³öÍ¼Ïñ·¶Î§Ö±½ÓÅĞÎª²»¿ÉĞĞ£©
     if x1<1 || x1>cols || y1<1 || y1>rows || x2<1 || x2>cols || y2<1 || y2>rows
         feasible = false;
         return;
     end
-    
-    % ÀûÓÃ Bresenham Ë¼Ïë»òÏßĞÔ²åÖµµÃµ½Á½µãÖ®¼äËùÓĞµÄ×ø±êµã
-    % ÕâÀïµÄ max ¾ÍÊÇÖ±ÏßµÄÏñËØ²½Êı£¬ÍêÃÀÌæ´úÁËÄúÄÇ¸ö 0.5 ²½³¤µÄ for Ñ­»·
     dx = abs(x2 - x1);
     dy = abs(y2 - y1);
     steps = max(dx, dy); 
     
     if steps == 0
-        % Èç¹ûÁ½µãÖØºÏ£¬¼ì²é¸ÃµãÊÇ·ñÔÚÕÏ°­ÎïÉÏ
         feasible = (map(y1, x1) ~= 0); 
         return;
     end
-    
-    % ºËĞÄÌáËÙ²Ù×÷£ºÉú³ÉÈ«²¿ X ºÍ Y µÄÏòÁ¿£¨Ò»´ÎĞÔÉú³É£¬²»ÔÙ×ßÑ­»·£©
     x_points = round(linspace(x1, x2, steps+1));
     y_points = round(linspace(y1, y2, steps+1));
-    
-    % ½« XºÍY ×ª»¯Îª MATLAB Í¼Ïñ¾ØÕóµÄÒ»Î¬ÏßĞÔË÷Òı
-    % ÕâÒ»²½Ö±½ÓÌæ´úÁËÉÏÃæµÄ 4´Î ceil/floor ÅĞ¶ÏºÍ 4´Î feasiblePoint µ÷ÓÃ
     idx = y_points + (x_points - 1) * rows;
-    
-    % ¼ì²éÕâĞ©ÏñËØµãÖĞ£¬ÊÇ·ñº¬ÓĞÕÏ°­Îï£¨Í¼ÏñÖĞºÚÉ«Îª0£¬°×É«Îª1»ò255£©
     if any(map(idx) == 0)
         feasible = false;
     else
@@ -449,378 +309,81 @@ function feasible = collisionChecking_deep(startPose, goalPose, map)
     end
 end
 
-function s = getInitGAPath(path, D, obs, p)
-    [n, ~] = size(path);
-    out = path(1, :);
-    
-    [rows, cols] = size(obs); % ÌáÇ°»ñÈ¡µØÍ¼³ß´ç£¬Ìá¸ß·ÀÓùÁ¦
-    
-    for i = 2:n-1
-        % ¡¾ºËĞÄĞŞ¸Ä 1¡¿½«Âß¼­·­×ª£¬ÈÃ¸ÅÂÊ p ³ÉÎª¡°·¢Éú±äÒìµÄ¸ÅÂÊ¡±
-        % ÕâÑùÎÒÃÇµ÷ÓÃÊ±´« 0.8£¬¾ÍÒâÎ¶×ÅÓĞ 80% µÄ½Úµã»á±ä¶¯£¬´ó´óÔö¼ÓÖÖÈº¶àÑùĞÔ£¡
-        if rand < p 
-            pt = path(i, :);
-            is_ok = false;
-            
-            % ¡¾ºËĞÄĞŞ¸Ä 2¡¿¸ø while ¼ÓÉÏ×î´ó 10 ´ÎÖØÊÔÏŞÖÆ£¬±ÜÃâÔÚÏÁÕ­Í¨µÀÀïËÀÑ­»·£¡
-            for attempt = 1:10
-                num_rand = randi([-D, D], 1, 1);
-                pt(1,1) = round(path(i,1) + num_rand * cos(path(i,3) + pi/2));
-                pt(1,2) = round(path(i,2) + num_rand * sin(path(i,3) + pi/2));
-                pt(1,3) = path(i,3);
-                
-                % ±ß½ç¼ì²é£¬³¹µ×·ÀÖ¹ map(x,y) Ë÷ÒıÔ½½ç
-                if pt(1,1) >= 1 && pt(1,1) <= cols && ...
-                   pt(1,2) >= 1 && pt(1,2) <= rows && ...
-                   obs(pt(1,2), pt(1,1)) ~= 0
-                    out = [out; pt];
-                    is_ok = true;
-                    break; % ±äÒì³É¹¦£¬Ìø³öÖØÊÔ
-                end
-            end
-            
-            % ¡¾±£»¤»úÖÆ¡¿Èç¹û³¢ÊÔÁË10´ÎÈÔÈ»×²Ç½£¬ÍËÒ»²½£¬Ö±½Ó±£ÁôÔ­½Úµã£¬·ÀÖ¹Â·¾¶¶Ï¿ª
-            if ~is_ok
-                out = [out; path(i, :)];
-            end
-        else
-            out = [out; path(i, :)];
+function [new_pop] = crossover_ASAC_GPTT(pop, pc, d_th)
+    [px, ~] = size(pop);
+    new_pop =cell(px, 1); 
+    for i = 1:2:px-1
+        p1 = pop{i, 1};
+        p2 = pop{i+1, 1};
+        [n1, ~] = size(p1);
+        [n2, ~] = size(p2);
+        if n1 < 3 || n2 < 3
+            return;
         end
-    end
-    s = [out; path(n, :)];
-end
-
-function s=getInitGAPath1(path,D,obs,p)
-     [n,~]=size(path);
-     out=path(1,:);
-     for i=2:n-1
-         if rand<p
-            pt=path(i,:);
-            out=[out;pt];
-         else
-             while 1
-                 num_rand=randi([0,2*D],1,1)-D;
-                 pt(1,1)=round(path(i,1)+num_rand*cos(path(i,3)+pi/2));
-                 pt(1,2)=round(path(i,2)+num_rand*sin(path(i,3)+pi/2));
-                 pt(1,3)=path(i,3);
-                 if obs(pt(1,2),pt(1,1)) ~= 0
-                     out=[out;pt];
-                     break;
-                 end
-             end
-         end
-     end
-     s=[out;path(n,:)];
-end
-
-function s=getInsertPoints(pt,pt1,D,obpath,mindis,refpath)
-    theta=caculaterangle(pt,pt1);
-    path=getStraightPath1( pt,pt1, 1,0 );
-    lateral=traceerror( path, refpath );
-    [n,~]=size(path);
-    for i=1:n
-        while 1
-            if lateral(i)<2
-                D=0;
+        if rand < pc 
+            [idx_in_p2, dists] = knnsearch(p2, p1);
+            valid_idx = find(dists < d_th);
+            if isempty(valid_idx)
+                return;
+            end  
+            valid_idx = valid_idx(valid_idx > 1 & valid_idx < n1-1);
+            if isempty(valid_idx)
+                return;
+            end 
+            cross_idx_p1 = valid_idx(randi(length(valid_idx)));
+            cross_idx_p2 = idx_in_p2(cross_idx_p1);
+            if cross_idx_p2 <= 1 || cross_idx_p2 >= n2
+                return;
             end
-            num_rand=randi([0,2*D],1,1)-D;
-            path1(i,1)=round(path(i,1)+num_rand*cos(theta+pi/2));
-            path1(i,2)=round(path(i,2)+num_rand*sin(theta+pi/2));
-            flag=0;
-            for j=1:length(obpath)
-                dis=getDis(path1(i,:),obpath(j,:));
-                if dis>mindis
-                    flag=1;
-                    break;
-                end
-            end
-            if flag==1 break;end
-%             if map(path1(i,2),path1(i,1))==255 || map(path1(i,2),path1(i,1))==1
-%                 break;
-%             end
+            new_pop{i, 1} = [p1(1:cross_idx_p1, :); p2(cross_idx_p2+1:end, :)];
+            new_pop{i+1, 1} = [p2(1:cross_idx_p2, :); p1(cross_idx_p1+1:end, :)];
         end
+        new_pop{i, 1} = p1;
+        new_pop{i+1, 1} = p2;
     end
-    path1(:,3)=0;
-    s=path1;
-end
-
-function s=judgeCurve(p1,p2,p3)
-    A=p3(1,2)-p1(1,2);
-    B=p1(1,1)-p3(1,1);
-    C=p1(1,2)*p3(1,1)-p1(1,1)*p3(1,2);
-    D=A*p2(1,1)+B*p2(1,2)+C;
-    if D>0
-        s=1;%ÓÒ²à
-    elseif D<0
-        s=2;%×ó²à
-    else
-        s=0;%×ó²à
+    if mod(px, 2) == 1
+        new_pop{px, 1} = pop{px, 1};
     end
-end
-
-% ±äÒì²Ù×÷
-% º¯ÊıËµÃ÷
-% ÊäÈë±äÁ¿£ºpop£ºÖÖÈº£¬pm£º±äÒì¸ÅÂÊ
-% Êä³ö±äÁ¿£ºnewpop±äÒìÒÔºóµÄÖÖÈº
-function [new_pop] = mutation_shiche(pop, pm, obpath, knt,min_k,mindis)
-[px, ~] = size(pop);
-new_pop = {};
-%knt=5;
-for i = 1:px
-    % ³õÊ¼»¯×î´óµü´ú´ÎÊı
-    if i==min_k
-        new_pop{i, 1} = pop{i, 1};
-        continue;
-    end
-    max_iteration = 0;
-    single_new_pop = pop{i, 1};
-    [cnt,~] = size(single_new_pop);
-    % single_new_pop_slice³õÊ¼»¯
-    %single_new_pop_slice = [];
-    if(rand < pm)
-        while max_iteration<50
-%             if max_iteration >30
-%                 rand_index=ceil(rand*cnt+60);
-%                 if rand_index>cnt-knt 
-%                     rand_index = cnt-knt;
-%                 end
-%             else
-%                 rand_index=ceil(rand*cnt-knt);
-%             end
-            rand_index=ceil(rand*cnt-knt);
-            if rand_index<1 rand_index=1;end
-            p1=single_new_pop(rand_index,:);
-            p2=single_new_pop(rand_index+knt,:);
-            %if collisionChecking(p1(:,1:2),p2(:,1:2),G)
-            if collisionChecking_shiche(p1(:,1:2),p2(:,1:2),obpath,mindis)
-                %dis_l = sqrt((p2(1,2)- p1(1,2))^2 + (p2(1,1) - p1(1,1) )^2);
-                a=1/knt;
-                for j=1:(knt-1)
-                    single_new_pop(rand_index+j,1) = round(p1(1,1) + a * j * (p2(1,1) - p1(1,1)));
-                    single_new_pop(rand_index+j,2) = round(p1(1,2) + a * j * (p2(1,2) - p1(1,2)));
-                end          
-            end
-            max_iteration=max_iteration+1;
-        end
-        new_pop{i, 1} = single_new_pop;
-    else
-        new_pop{i, 1} = pop{i, 1};
-    end
-
-end
-end
-
-function s=getPathCurve(Hf,Bf,ss_min)
-    n=length(ss_min);
-    cur=zeros(n,1);
-    for i=1:n
-       if i<Bf+1
-           bd=0;
-       else
-           bd=Bf;
-       end
-       if (n-i)<Hf
-           hd=n-i;
-       else
-           hd=Hf;
-       end
-       xx=getCurvature(ss_min((i-bd):(i+hd),1:2),2,ss_min(i,1:2));
-       cur(i)=xx(2);
-    end
-    s=cur;
-end
-
-function s=getCurvature(fit_path,Dimen,c_point)
-%%%%idÎªµ±Ç°µã
-    m=length(fit_path);
-    A=zeros(m,Dimen+1);
-    for i=1:m
-        for j=1:(Dimen+1)
-            if j==(Dimen+1)
-               A(i,j)=1;
-            else
-               A(i,j)=fit_path(i,1)^(Dimen+1-j);
-            end
-        end
-    end
-    C=fit_path(:,2);
-    %D=inv(A'*A)*A'*C;
-   % D=(A'*A)\A'*C;
-    D=pinv(A'*A)*A'*C;
-%     for i=length(D)
-%         if abs(D(i))<1e-10
-%             D(i)=0;
-%         end
-%     end
-    %»ñÈ¡×î½üµã
-    near_point=getNearstPoint(D,c_point,fit_path);
-    id=near_point(1,1);
-    %cnt=length(D);
-    val=mul(D,id);
-    theta=atan(val);
-    cur=2*D(1);
-    cuu=sqrt((1+(2*D(1)*id+D(2))^2)^3);
-    cur=cur/cuu;
-    s=[theta,cur,D(1),D(2),D(3),near_point(1,1),near_point(1,2)];
-%     for i=1:length(fit_path)
-%         out_path(i,1)=fit_path(i,1);
-%         out_path(i,2)=A(i,:)*D;
-%         val=mul(D,fit_path(i,1));
-%         out_path(i,3)=atan(val);
-%     end
-end
-
-function s=getNearstPoint(D,p,path)
-    cnt=0;
-    x1=path(1,1);
-    n=length(path);
-    x2=path(n ,1);
-    dis=sqrt((path(1,1)-path(2,1))^2+(path(1,2)-path(2,2))^2);
-    if(dis<0.1)
-        mul1=1;
-    else
-        mul1=round(dis*10);
-    end
-    x=linspace(x1,x2,n*mul1);
-    n1=length(x);
-    y=zeros(1,n1);
-    for i=1:n1
-        y(i)=D(1)*x(i)*x(i)+D(2)*x(i)+D(3);
-    end
-    dis1=999;
-    for i=1:n1
-        d=sqrt((x(i)-p(1,1))^2+(y(i)-p(1,2))^2);
-        if d<dis1
-            dis1=d;
-            cnt=i;
-        end    
-    end
-    % path=[x',y'];
-    % plot(path(:,1),path(:,2),'r.');
-    % hold on
-    s=[x(cnt),y(cnt)];
-end
-function s=mul(d,x)
-  val=0;
-  n=length(d);
-  for i=1:(n-1)
-      val=val+(n-i)*d(i)*x^(n-i-1);
-  end
-  s=val;
-
 end
 
 function [new_pop] = selection1(pop, fit_value)
     [px, ~] = size(pop);
-    
-    % ·ÀÓùĞÔ±à³Ì£º±ÜÃâÊÊÓ¦¶ÈÈ«Îª0µ¼ÖÂ×Ü¸ÅÂÊÎª0
     total_fit = sum(fit_value);
     if total_fit == 0
-        fit_value = ones(px, 1); % Èç¹ûÈ«0£¬Ëæ»ú¸³Óè¾ùµÈ¸ÅÂÊ
+        fit_value = ones(px, 1); 
         total_fit = px;
     end
     
-    % 1. ¼ÆËãÀÛ»ıºÍ£¬²¢×ªÖÃ³É 1ĞĞxÁĞ µÄĞĞÏòÁ¿£¨ÎªºóĞø¾ØÕó¹ã²¥×ö×¼±¸£©
     edges = cumsum(fit_value)'; 
     
-    % 2. Éú³É px ¸ö 0~total_fit Ö®¼äµÄËæ»úÊı£¨²»ĞèÒªÅÅĞò£©
     r = rand(px, 1) * total_fit; 
-    
-    % 3. ¡¾ºËĞÄÏòÁ¿»¯Ìæ»»¡¿ÀûÓÃ MATLAB µÄÒşÊ½À©Õ¹£¨¹ã²¥£©´úÌæ discretize
-    % rÊÇ pxĞĞ1ÁĞ£¬edgesÊÇ1ĞĞpxÁĞ¡£Ïà¼õºó×Ô¶¯À©Õ¹³É pxĞĞpxÁĞµÄ¾ØÕó¡£
-    % sum(..., 2) ¶ÔÃ¿Ò»ĞĞÇóºÍ£¬¼ÆËã³öµÄÊı×Ö +1 ¾ÍÊÇ¸öÌåËùÔÚµÄÇø¼äË÷Òı¡£
+   
     selected_indices = sum(r > edges, 2) + 1;
-    
-    % 4. ¸ù¾İË÷ÒıÖ±½ÓÌáÈ¡¸¸´ú¸öÌå£¬Éú³ÉĞÂÖÖÈº
     new_pop = pop(selected_indices);
 end
-% function [new_pop] = selection1(pop, fit_value)
-%     [px, ~] = size(pop);
-%     
-%     % ¡¾°²È«·ÀÓù¡¿£º´¦ÀíÈ«0ÊÊÓ¦¶È»ò¼«Ğ¡ÊÊÓ¦¶ÈµÄÎÊÌâ£¨·ÀÖ¹ discretize ±ß½çÏàµÈ±¨´í£©
-%     if sum(fit_value) == 0
-%         fit_value = ones(px, 1); 
-%     end
-%     
-%     % 1. ¼ÆËãÀÛ»ıÊÊÓ¦¶È£¨²»ÔÙĞèÒª¹éÒ»»¯µ½1£¬Ö±½ÓÓÃÔ­Öµ×öÇø¼ä±ß½ç£©
-%     edges = cumsum(fit_value);
-%     total_fit = edges(end);
-%     
-%     % 2. Éú³É [0, total_fit] Çø¼äÄÚµÄ px ¸öËæ»úÊı£¨ÎŞĞèÅÅĞò£©
-%     r = rand(px, 1) * total_fit;
-%     
-%     % 3. ¡¾ºËĞÄÌáËÙ¡¿Ê¹ÓÃ discretize ½«Ëæ»úÊıÓ³Éäµ½ËùÔÚµÄÀÛ»ıÇø¼ä -> ·µ»Ø¸öÌåË÷Òı
-%     selected_indices = discretize(r, [0; edges]);
-%     
-%     % 4. ¸ù¾İË÷ÒıÌôÑ¡³öĞÂµÄÖÖÈº
-%     new_pop = pop(selected_indices);
-%     
-%     % 5. È·±£Êä³öÎªÁĞÏòÁ¿µÄÔª°ûÊı×é
-%     new_pop = reshape(new_pop, [], 1); 
-% end
 
-function [new_pop] = selection2(pop, fit_value)
-    [px, ~] = size(pop);
-    
-    % ¼ÆËãÀÛ»ı¸ÅÂÊ£¨¹éÒ»»¯µ½0~1Çø¼ä£©
-    total_fit = sum(fit_value);
-    p_fit_value = cumsum(fit_value) / total_fit;
-    
-    new_pop = cell(px, 1);
-    
-    % Ö±½ÓÑ­»·±éÀú£¬²»ĞèÒªÅÅĞòºÍ¸´ÔÓµÄË«Ö¸Õë
-    for i = 1:px
-        r = rand(); % Éú³ÉÒ»¸ö 0~1 Ö®¼äµÄËæ»úÊı
-        % ÕÒµ½µÚÒ»¸ö´óÓÚ r µÄ¸ÅÂÊÎ»ÖÃ
-        idx = find(p_fit_value >= r, 1); 
-        new_pop{i, 1} = pop{idx, 1};
-    end
-end
-
-% ½»²æ±ä»»£¨²ÉÓÃµ¥µã½»²æ£©
-% ÊäÈë±äÁ¿£ºpop£º¸¸´úÖÖÈº£¨Ôª°ûÊı×é£¬ÆäÖĞÃ¿¸öÔªËØÎª Nx2 µÄ×ø±ê¾ØÕó£©£¬pc£º½»²æµÄ¸ÅÂÊ
-% Êä³ö±äÁ¿£ºnewpop£º½»²æºóµÄÖÖÈº
 function [new_pop] = crossover1(pop, pc)
     [px, ~] = size(pop);
-    
-    % 1. Ô¤·ÖÅäÄÚ´æ£¬²»ÒªÊ¹ÓÃ {} ¶¯Ì¬À©Èİ£¬¼«´óÌáÉıÔËĞĞËÙ¶È
-    new_pop = cell(px, 1); 
-    
-    % 2. Á½Á½Åä¶Ô½øĞĞ½»²æ
+    new_pop = cell(px, 1);   
     for i = 1:2:px-1
         p1 = pop{i, 1};
         p2 = pop{i+1, 1};
         
-        % ÅĞ¶ÏÊÇ·ñ½øĞĞ½»²æ
         if rand < pc
-            % 3. ¡¾ºËĞÄ°²È«ĞŞÕı¡¿Ê¹ÓÃ intersect µÄ 'rows' Ñ¡Ïî
-            % Ö®Ç°µÄ ismember ÊÇ°´ÁĞ±È½Ï£¬»áµ¼ÖÂ×ø±ê´íÂÒ¡£ÓÃ 'rows' ÑÏ¸ñ°´ [x, y] µã¶ÔÆ¥Åä
             [~, idx_in_p1, idx_in_p2] = intersect(p1, p2, 'rows');
             m = length(idx_in_p1);
-            
-            % ±ØĞëÓĞÖÁÉÙ3¸öÒÔÉÏµÄ¹«¹²½Úµã²ÅÄÜ½øĞĞ½»²æ£¨±£Ö¤²»»áÇĞµôÆğµãºÍÖÕµã£©
             if m >= 3
-                % 4. Ëæ»úÌôÑ¡ÖĞ¼äµÄÒ»¸ö¹«¹²½»²æµã£¨±ÜÃâÇĞµôÆğµã/ÖÕµã£©
                 r = randi([2, m-1]); 
                 cut1 = idx_in_p1(r);
-                cut2 = idx_in_p2(r);
-                
-                % 5. Ö´ĞĞµ¥µã½»²æ£¬Æ´½ÓÂ·¾¶
-                % ¡¾Î¬¶È°²È«¡¿Â·¾¶Îª Nx2 ¾ØÕó£¬±ØĞëÊ¹ÓÃ·ÖºÅ ; ½øĞĞ´¹Ö±Æ´½Ó
+                cut2 = idx_in_p2(r);               
                 new_pop{i, 1}   = [p1(1:cut1, :); p2(cut2+1:end, :)];
-                new_pop{i+1, 1} = [p2(1:cut2, :); p1(cut1+1:end, :)];
-                
-                % ½»²æ³É¹¦£¬Ö±½ÓÌø¹ı±£ÁôÔ­Ê¼Â·¾¶µÄ²½Öè
+                new_pop{i+1, 1} = [p2(1:cut2, :); p1(cut1+1:end, :)];                
                 continue; 
             end
         end
-        
-        % ¸ÅÂÊÎ´ÃüÖĞ¡¢»òÕÒ²»µ½¹«¹²µãµÄÇé¿öÏÂ£¬±£ÁôÔ­¸öÌå
         new_pop{i, 1} = p1;
         new_pop{i+1, 1} = p2;
     end
-    
-    % 6. Èç¹ûÖÖÈºÊıÁ¿ÊÇÆæÊı£¬×îºóÒ»¸ö¸öÌåÖ±½ÓÍ¸´«
     if mod(px, 2) == 1
         new_pop{px, 1} = pop{px, 1};
     end
@@ -841,69 +404,20 @@ function [new_pop] = mutation1(pop, pm, G, knt, min_k)
         
         if rand < pm && cnt > knt
             max_start_idx = cnt - knt;
-            attempt = 0; % ÖØÖÃ³¢ÊÔ´ÎÊı
-            
-            % ¡¾ºËĞÄĞŞ¸Ä¡¿±äÒìµÄÊ§°Ü²»Ö±½ÓÌø¹ı£¬¶øÊÇÔÊĞí³¢ÊÔ 5 ´Î²»Í¬µÄ½Ø¶Ïµã
+            attempt = 0;           
             while attempt < 10
                 rand_index = randi([1, max_start_idx]);
                 p1 = single_new_pop(rand_index, :);
                 p2 = single_new_pop(rand_index + knt, :);
                 
                 if collisionChecking_deep(p1, p2, G)
-                    % Èç¹ûÖ±Ïß¿ÉĞĞ£¬Á¢¿ÌÓÃ linspace ²åÖµÌæ»»
                     x_pts = round(linspace(p1(1), p2(1), knt + 1));
                     y_pts = round(linspace(p1(2), p2(2), knt + 1));
                     single_new_pop(rand_index+1 : rand_index+knt-1, 1) = x_pts(2:knt);
                     single_new_pop(rand_index+1 : rand_index+knt-1, 2) = y_pts(2:knt);
-                    
-                    break; % ±äÒì³É¹¦£¬Ìø³ö while£¬±£Áô´Ë×Ó´ú
+                    break; 
                 end
                 attempt = attempt + 1;
-            end
-        end
-        
-        new_pop{i, 1} = single_new_pop;
-    end
-end
-% ±äÒì²Ù×÷
-% ÊäÈë±äÁ¿£ºpop£ºÖÖÈº£¨Ôª°ûÊı×é£©£¬pm£º±äÒì¸ÅÂÊ£¬G£º»·¾³µØÍ¼£¬knt£º¾Ö²¿±äÒì³¤¶È£¬min_k£º×îÓÅ¸öÌåË÷Òı
-% Êä³ö±äÁ¿£ºnew_pop£º±äÒìºóµÄÖÖÈº
-function [new_pop] = mutation2(pop, pm, G, knt, min_k)
-    [px, ~] = size(pop);
-    % 1. Ô¤·ÖÅäÄÚ´æ£¨¸æ±ğ¶¯Ì¬À©Èİ£¬ÌáËÙÃ÷ÏÔ£©
-    new_pop = cell(px, 1); 
-    
-    for i = 1:px
-        % 2. ¾«Ó¢±£Áô²ßÂÔ£º×î¼Ñ¸öÌå²»²ÎÓë±äÒì
-        if i == min_k
-            new_pop{i, 1} = pop{i, 1};
-            continue;
-        end
-        
-        single_new_pop = pop{i, 1};
-        [cnt, ~] = size(single_new_pop);
-        
-        % 3. ÅĞ¶ÏÊÇ·ñ´¥·¢±äÒì
-        if rand < pm
-            % ¼ì²éÂ·¾¶³¤¶ÈÊÇ·ñ×ã¹»×ö½Ø¶Ï±äÒì£¨±ß½ç·ÀÓù£©
-            if cnt > knt
-                % °²È«µØÉú³ÉËæ»ú½Ø¶ÏÎ»ÖÃ£¨Ïû³ıÁËÔ­´úÂëµÄ ceil ¼ÆËã£¬·ÀÖ¹Êı×éÔ½½ç£©
-                max_start_idx = cnt - knt;
-                rand_index = randi([1, max_start_idx]);
-                
-                p1 = single_new_pop(rand_index, :);
-                p2 = single_new_pop(rand_index + knt, :);
-                
-                % 4. ¡¾ºËĞÄÓÅ»¯1¡¿Ö»Ğè¼ì²âÒ»´ÎÁ¬ÏßÊÇ·ñ¿ÉĞĞ£¬·ÏÆúÎŞÒâÒåµÄ30´Î while Ñ­»·£¡
-                if collisionChecking_deep(p1, p2, G)
-                    % 5. ¡¾ºËĞÄÓÅ»¯2¡¿ÀûÓÃ linspace Ê¸Á¿»¯Éú³É²åÖµµã£¬³¹µ×¸ÉµôÄÚ²¿µÄ for Ñ­»·£¡
-                    x_pts = round(linspace(p1(1), p2(1), knt + 1));
-                    y_pts = round(linspace(p1(2), p2(2), knt + 1));
-                    
-                    % Ò»´ÎĞÔ¸³ÖµÌæ»»ÖĞ¼äËùÓĞµÄµã£¨ÇĞµôÊ×Î²µÄ p1 ºÍ p2£©
-                    single_new_pop(rand_index+1 : rand_index+knt-1, 1) = x_pts(2:knt);
-                    single_new_pop(rand_index+1 : rand_index+knt-1, 2) = y_pts(2:knt);
-                end
             end
         end
         
@@ -922,20 +436,18 @@ function s=informed_rrt_1(source,goal,op_dis,Imp)
     T.v(1).yPrev = y_I;
     T.v(1).dist=0;       
     T.v(1).indPrev = 0;     
-    xL=size(Imp,2);%ï¿½ï¿½Í¼xï¿½á³¤ï¿½ï¿½
-    yL=size(Imp,1);%ï¿½ï¿½Í¼yï¿½á³¤ï¿½ï¿½
+    xL=size(Imp,2);
+    yL=size(Imp,1);
     count=1;
-    %goal = [x_G,y_G];
     start_goal_dist = 1000000;
-    path.pos(1).x = (source(1,1)+goal(1,1))/2;%350;
-    path.pos(1).y = (source(1,2)+goal(1,2))/2;%350;
+    path.pos(1).x = (source(1,1)+goal(1,1))/2;
+    path.pos(1).y = (source(1,2)+goal(1,2))/2;
     knt=5000;
     total_dis=zeros(knt,2);
     data_=[];
     Time=tic;
     for iter = 1:5000
         x_rand=[];
-        %%=========é‡‡æ ·æƒ³x_rand========%%
         if start_goal_dist < 1000000
             while 1
                 x_rand(1) = xL*rand; 
@@ -952,11 +464,9 @@ function s=informed_rrt_1(source,goal,op_dis,Imp)
                 x_rand=goal;
             end
         end
-        %%=======å¯»æ‰¾x_near===========%%
         x_near=[];
         min_dist = 1000000;
         near_iter = 1;
-        %near_iter_tmp = 1;
         [~,N]=size(T.v);
         for j = 1:N
            x_near(1) = T.v(j).x;
@@ -969,17 +479,13 @@ function s=informed_rrt_1(source,goal,op_dis,Imp)
         end
         x_near(1) = T.v(near_iter).x;
         x_near(2) = T.v(near_iter).y;
-        %%========è·å–x_new============%%
         x_new=[];
         near_to_rand = [x_rand(1)-x_near(1),x_rand(2)-x_near(2)];
         normlized = near_to_rand / norm(near_to_rand) * Delta;
         x_new = x_near + normlized;
-        %plot([x_near(1),x_new(1)],[x_near(2),x_new(2)],'color',[0.7,0.7,0.7], 'Linewidth', 0.5);
-        %%=======éšœç¢æ£?æµ?===============%%
         if ~collisionChecking_deep(x_near,x_new,Imp) 
            continue;
         end
-        %%=======  nearC && chooseParent  =========%%
         near_iter_tmp = near_iter;
         nearptr = [];
         nearcount = 0;
@@ -993,7 +499,6 @@ function s=informed_rrt_1(source,goal,op_dis,Imp)
            dist = norm(x_new - x_neartmp) + T.v(j).dist;
            norm_dist = norm(x_new - x_neartmp);
            if norm_dist < 50
-               %nearC
                if collisionChecking_deep(x_neartmp,x_new,Imp)
                     nearcount = nearcount + 1;
                     nearptr(nearcount,1) = j;
@@ -1008,14 +513,12 @@ function s=informed_rrt_1(source,goal,op_dis,Imp)
         x_near(1) = T.v(near_iter).x;
         x_near(2) = T.v(near_iter).y;
         count=count+1;
-        %%========å°†X_NEWå¢åŠ åˆ°æ ‘ä¸?========%%
         T.v(count).x = x_new(1);
         T.v(count).y = x_new(2); 
         T.v(count).xPrev = x_near(1);     
         T.v(count).yPrev = x_near(2);
         T.v(count).dist= norm(x_new - x_near) + T.v(near_iter).dist;          
         T.v(count).indPrev = near_iter;   
-        %%========  rewirte  =========%%
         [M,~] = size(nearptr);
         for k = 1:M
             x_1(1) = T.v(nearptr(k,1)).x;
@@ -1029,20 +532,17 @@ function s=informed_rrt_1(source,goal,op_dis,Imp)
                 T.v(nearptr(k,1)).indPrev = count;
             end
         end
-        %plot([x_near(1),x_new(1)],[x_near(2),x_new(2)],'color',[0.7, 0.7, 0.7],'Linewidth', 0.5);
-        if norm(x_new - goal) < 30 || collisionChecking_deep(x_new,goal,Imp)%2*Thr
+        if norm(x_new - goal) < 30 || collisionChecking_deep(x_new,goal,Imp)
             if (T.v(count).dist + norm(x_new - goal)) < start_goal_dist
                 start_goal_dist = (T.v(count).dist + norm(x_new - goal));
                 total_dis(iter,1)=start_goal_dist;
                 tEnd = toc(Time); 
                 xxxx=[start_goal_dist,tEnd];
-                data_=[data_;xxxx];
-                %disp(['ÔËĞĞÊ±¼ä: ',num2str(toc)]);
                 path.pos = [];
                 if iter < 5000
                     path.pos(1).x = x_G; path.pos(1).y = y_G;
                     path.pos(2).x = T.v(end).x; path.pos(2).y = T.v(end).y;
-                    pathIndex = T.v(end).indPrev; % ï¿½Õµï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿?
+                    pathIndex = T.v(end).indPrev;
                     j=0;
                     while 1
                         path.pos(j+3).x = T.v(pathIndex).x;
@@ -1052,8 +552,8 @@ function s=informed_rrt_1(source,goal,op_dis,Imp)
                             break
                         end
                         j=j+1;
-                    end  % ï¿½ï¿½ï¿½Õµï¿½ï¿½ï¿½İµï¿½ï¿½ï¿½ï¿½
-                    path.pos(end+1).x = x_I; path.pos(end).y = y_I; % ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â·ï¿½ï¿½
+                    end  
+                    path.pos(end+1).x = x_I; path.pos(end).y = y_I;
                 else
                     disp('Error, no path found!');
                 end
@@ -1083,11 +583,9 @@ function s=Q_rrt_informed_1(source,goal,op_dis,Imp)
     path.pos(1).y = (source(1,2)+goal(1,2))/2;
     knt = 5000;
     total_dis = zeros(knt,2);
-    Thr = 10;                  % goal tolerance
-    Delta = 10;                % extension step size
-    Depth = 2;                 % Q-RRT* depth parameter (number of ancestors to consider)
-
-    %% ³õÊ¼»¯Ê÷ T
+    Thr = 10;            
+    Delta = 10;         
+    Depth = 2;                
     T.v(1).x = x_I;
     T.v(1).y = y_I;
     T.v(1).xPrev = x_I;
@@ -1098,7 +596,6 @@ function s=Q_rrt_informed_1(source,goal,op_dis,Imp)
     data_ = [];
     for iter = 1:5000
         x_rand = [];
-        %% ========= ²ÉÑù (Informed ²ÉÑù²ßÂÔ) ========= %%
         if start_goal_dist < 1000000
             while 1
                 x_rand(1) = xL * rand;
@@ -1115,8 +612,6 @@ function s=Q_rrt_informed_1(source,goal,op_dis,Imp)
                 x_rand = goal;
             end
         end
-
-        %% ========= Ñ°ÕÒ×î½üÁÚ x_near ========= %%
         min_dist = 1000000;
         near_iter = 1;
         N = length(T.v);
@@ -1130,50 +625,38 @@ function s=Q_rrt_informed_1(source,goal,op_dis,Imp)
             end
         end
         x_near = [T.v(near_iter).x, T.v(near_iter).y];
-
-        %% ========= Éú³É x_new ========= %%
         near_to_rand = x_rand - x_near;
         normlized = near_to_rand / norm(near_to_rand) * Delta;
         x_new = x_near + normlized;
-        %plot([x_near(1),x_new(1)],[x_near(2),x_new(2)],'color',[0.7,0.7,0.7], 'Linewidth', 0.5);
-        %% ========= Åö×²¼ì²â ========= %%
         if ~collisionChecking_deep1(x_near, x_new, Imp)
             continue;
         end
-
-        %% ========= 1. Ñ°ÕÒ Near ¼¯ºÏ & 2. ChooseParent (Q-RRT* °æ±¾) ========= %%
-        % ÊÕ¼¯ËùÓĞÔÚ°ë¾¶ 50 ÄÚÇÒÓë x_new ÎŞÅö×²µÄ½ÚµãË÷Òı£¨Ô­Âß¼­±£Áô£©
         nearptr = [];
         nearcount = 0;
         near_dist = norm(x_new - x_near) + T.v(near_iter).dist;
-        best_parent_idx = near_iter;   % ³õÊ¼¸¸½ÚµãÎª×î½üÁÚ
+        best_parent_idx = near_iter;   
         best_parent_cost = near_dist;
-
-        % ¶ÔÃ¿¸öÒÑÓĞ½Úµã£¨³ı¸ù½ÚµãÍâ£©½øĞĞ¼ì²é
         for j = 2:N
             if j == near_iter
                 continue;
             end
             x_j = [T.v(j).x, T.v(j).y];
             norm_dist = norm(x_new - x_j);
-            if norm_dist < 50   % °ë¾¶ãĞÖµ (ÓëÔ­ÎÄÒ»ÖÂ)
+            if norm_dist < 50  
                 if collisionChecking_deep1(x_j, x_new, Imp)
                     nearcount = nearcount + 1;
                     nearptr(nearcount,1) = j;
-                    % ÏÈ¿¼ÂÇ¸Ã½Úµã±¾Éí×÷Îª¸¸½Úµã
                     cost_via_j = T.v(j).dist + norm_dist;
                     if best_parent_cost > cost_via_j
                         best_parent_cost = cost_via_j;
                         best_parent_idx = j;
                     end
-                    % ¿¼ÂÇ¸Ã½ÚµãµÄ×æÏÈ (Depth ²ã)
                     ancList = getAncestors(T, j, Depth);
-                    for k = 2:length(ancList)  % Ìø¹ı×ÔÉí£¨ÒÑÔÚÉÏÃæ¿¼ÂÇ£©
+                    for k = 2:length(ancList)  
                         anc_idx = ancList(k);
                         anc_pos = [T.v(anc_idx).x, T.v(anc_idx).y];
                         cost_via_anc = T.v(anc_idx).dist + norm(x_new - anc_pos);
                         if best_parent_cost > cost_via_anc
-                            % ¼ì²éÂ·¾¶ÎŞÅö×²
                             if collisionChecking_deep1(anc_pos, x_new, Imp)
                                 best_parent_cost = cost_via_anc;
                                 best_parent_idx = anc_idx;
@@ -1183,11 +666,7 @@ function s=Q_rrt_informed_1(source,goal,op_dis,Imp)
                 end
             end
         end
-
-        % ×îÖÕ¸¸½Úµã
         x_parent = [T.v(best_parent_idx).x, T.v(best_parent_idx).y];
-
-        %% ========= ½« x_new ¼ÓÈëÊ÷ ========= %%
         count = count + 1;
         T.v(count).x = x_new(1);
         T.v(count).y = x_new(2);
@@ -1195,44 +674,33 @@ function s=Q_rrt_informed_1(source,goal,op_dis,Imp)
         T.v(count).yPrev = x_parent(2);
         T.v(count).dist = best_parent_cost;
         T.v(count).indPrev = best_parent_idx;
-
-        %% ========= Rewire (Q-RRT* °æ±¾) ========= %%
-        % »ñÈ¡ x_new µÄ×æÏÈÁĞ±í£¨°üÀ¨×ÔÉí£©
         ancList_new = getAncestors(T, count, Depth);
 
         for k = 1:size(nearptr,1)
             idx_near = nearptr(k,1);
             x_near_pos = [T.v(idx_near).x, T.v(idx_near).y];
             current_cost = T.v(idx_near).dist;
-
-            % ³¢ÊÔÓÃ x_new ¼°ÆäÃ¿¸ö×æÏÈ½øĞĞÖØÁ¬
             for a = 1:length(ancList_new)
                 anc_idx = ancList_new(a);
                 anc_pos = [T.v(anc_idx).x, T.v(anc_idx).y];
                 new_cost = T.v(anc_idx).dist + norm(x_near_pos - anc_pos);
                 if new_cost < current_cost
                     if collisionChecking_deep(anc_pos, x_near_pos, Imp)
-                        % ¸üĞÂ¸¸½Úµã
                         T.v(idx_near).dist = new_cost;
                         T.v(idx_near).xPrev = anc_pos(1);
                         T.v(idx_near).yPrev = anc_pos(2);
                         T.v(idx_near).indPrev = anc_idx;
-                        current_cost = new_cost;  % ¸üĞÂÎªĞÂµÄ³É±¾£¬ÒÔ±ãºóĞø×æÏÈ³¢ÊÔ
-                        break;  % ÕÒµ½¸üÓÅ¼´¿ÉÌø³ö£¬ÒòÎª×æÏÈ°´¾àÀëµİ¼õ£¬µÚÒ»¸öÓĞĞ§µÄ×îÓÅ
+                        current_cost = new_cost;  
+                        break; 
                     end
                 end
             end
         end
-
-        %% ========= ¼ì²âÊÇ·ñµ½´ïÄ¿±ê ========= %%
         if norm(x_new - goal) < 30 || collisionChecking_deep(x_new, goal, Imp)
             if (T.v(count).dist + norm(x_new - goal)) < start_goal_dist
                 start_goal_dist = (T.v(count).dist + norm(x_new - goal));
                 total_dis(iter,1) = start_goal_dist;
                 tEnd = toc(Time);
-                xxxx = [start_goal_dist, tEnd];
-                data_ = [data_; xxxx];
-                % ¼ÇÂ¼Â·¾¶£¨ÓÃÓÚ»æÍ¼£©
                 path.pos = [];
                 path.pos(1).x = x_G; path.pos(1).y = y_G;
                 path.pos(2).x = T.v(end).x; path.pos(2).y = T.v(end).y;
@@ -1263,8 +731,6 @@ function s=Q_rrt_informed_1(source,goal,op_dis,Imp)
         end
     end
 end
-
-%% ¸¨Öúº¯Êı£º»ñÈ¡½Úµã idx µÄ×æÏÈÁĞ±í£¨°üÀ¨×ÔÉí£¬ÏòÉÏ Depth ²ã£©
 function ancList = getAncestors(T, idx, Depth)
     ancList = idx;
     current = idx;
@@ -1277,8 +743,6 @@ function ancList = getAncestors(T, idx, Depth)
         end
     end
 end
-
-%% ================= ¸¨Öúº¯Êı ================= %%
 function feasible = collisionChecking_deep1(startPose, goalPose, map)
     x1 = round(startPose(1)); y1 = round(startPose(2));
     x2 = round(goalPose(1));  y2 = round(goalPose(2));
@@ -1303,23 +767,59 @@ function feasible = collisionChecking_deep1(startPose, goalPose, map)
         feasible = true;
     end
 end
-
-% ÓÃÓÚ Informed ²ÉÑùÅĞ¶Ï£¨Ô­ÎÄÒÑÓĞ£¬µ«Î´¸ø³ö£¬´Ë´¦²¹³ä£©
 function valid = new_node(x, y, c_best, source, goal)
-    % ÅĞ¶Ïµã (x,y) ÊÇ·ñÔÚ Informed ÍÖÇòÌåÄÚ
-    % ÍÖÇò½¹µãÎª source ºÍ goal£¬³¤ÖáÎª c_best
     c_min = norm(source - goal);
     if c_best <= c_min
         valid = false;
         return;
     end
     center = (source + goal) / 2;
-    % ½«µã±ä»»µ½ÒÔ center ÎªÔ­µã£¬³¤ÖáÎª x ÖáµÄ×ø±êÏµ
-    % ÕâÀï¼ò»¯´¦Àí£¬½öÓÃ¾àÀëºÍÅĞ¶Ï£¨Êµ¼ÊĞèĞı×ª¾ØÕó£¬µ«´úÂëÔ­Ñù±£Áô£©
     dist_sum = norm([x,y] - source) + norm([x,y] - goal);
     if dist_sum <= c_best
         valid = true;
     else
         valid = false;
     end
+end
+
+function s = getInitGAPath_new(path, D, obs, p)
+    [n, ~] = size(path);
+    out = path(1, :);
+    last_shift = 0; 
+    for i = 2:n-1
+        if rand < p 
+            pt = path(i, :);
+            is_ok = false;
+            dx = path(i+1, 1) - path(i, 1);
+            dy = path(i+1, 2) - path(i, 2);
+            len = sqrt(dx^2 + dy^2);
+            if len < 1e-6
+                out = [out; pt];
+                continue;
+            end
+            normal_vec_x = -dy / len;
+            normal_vec_y = dx / len;
+            for attempt = 1:10
+                target_shift = (rand * 2 - 1) * D;
+                current_shift = 0.7 * last_shift + 0.3 * target_shift;
+                
+                pt_new_x = round(pt(1,1) + current_shift * normal_vec_x);
+                pt_new_y = round(pt(1,2) + current_shift * normal_vec_y);
+                if collisionChecking_deep([pt_new_x, pt_new_y], [pt_new_x, pt_new_y], obs)       
+                    out = [out; [pt_new_x, pt_new_y, path(i,3)]];
+                    last_shift = current_shift; 
+                    is_ok = true;
+                    break;
+                end
+            end
+            if ~is_ok
+                out = [out; path(i, :)];
+                last_shift = 0;
+            end
+        else
+            out = [out; path(i, :)];
+            last_shift = 0; 
+        end
+    end
+    s = [out; path(n, :)];
 end
