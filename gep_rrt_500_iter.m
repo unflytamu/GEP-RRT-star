@@ -7,9 +7,9 @@ op_dis=759.2*1.01;
 Delta= 10;    
 mindis=15;
 tic
-%data=rrt_1(source,goal,op_dis,Imp,Delta);%combined with RRT*
-data=informed_rrt_1(source,goal,op_dis,Imp);%combined with Informed RRT*
-%data=Q_rrt_informed_1(source,goal,op_dis,Imp);%combined with Q_RRT*
+%data=rrt_1(source,goal,op_dis,Imp,Delta);%与RRT*结合
+data=informed_rrt_1(source,goal,op_dis,Imp);%与Informed RRT*结合
+%data=Q_rrt_informed_1(source,goal,op_dis,Imp);%与Q_RRT*结合
 init_path=getInitPath(data,mindis);
 GA_path=GA_optmisation(init_path,op_dis,Imp,mindis,Delta);
 disp([num2str(toc)]);
